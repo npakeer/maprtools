@@ -22,6 +22,7 @@ Options:
 
 Following example shows the collection of 1 jstack, 1 jstat with fcdebug interval for 1 minute. Note the fcdebug interval needs to be large enough for DEBUG to be collected for mapr client. The tool tries to revert the DEBUG back to INFO after the interval. jstat, jstacks and fcdebug are collected in parallel. Heap information/dump is collected only after other diagnostics collection is finished. This is needed to avoid collecting misleading jstacks, which can happen when heap information collection can freeze the java process.
 
+```bash
 $ ./jdump.sh --fcdebug --jstackcnt 1 --jstatcnt 1 --heapdump --fcint 1 14139
 Using default directory /opt/mapr/logs/jdump_14139_20241014_164209
 Checking the output directory /opt/mapr/logs/jdump_14139_20241014_164209
