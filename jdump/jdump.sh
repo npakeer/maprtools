@@ -99,6 +99,7 @@ collect_jstat() {
 	if [ $jstatret -ne 0 ]; then 
 		echo "Having trouble running jstat for the pid ${pid}"
 	fi
+	echo "jstat collection ended"
 	return $jstatret	
 
 }
@@ -119,6 +120,7 @@ collect_jstack() {
 		sleep ${jstackint}s				
 		counter=$((counter + 1))
 	done	
+	echo "jstacks collection ended"
 	return $jstckret
 }
 
@@ -141,6 +143,7 @@ collect_heap_info() {
 			echo "Heap dump collection failed"
 		fi		
 	fi	
+	echo "Heap Information collection ended"
 	return $jmapret
 }
 
@@ -148,7 +151,8 @@ collect_fcdebug() {
 
 	local fcret=0
 	echo "Collecting mapr file client debug, using fcdebug"
-	shmid=`ipcs -mp | awk '{if ($3 == "1290894") {split($0,a," "); system("ipcs -mi "a[1])}}' | grep 'Shared memory Segment shmid' | awk -F"=" '{print $NF}' | sort -n | head -1`
+	shmid=`ipcs -mp | awk -v target_pid=$pid '{if ($3 == target_pid) {split($0,a," "); system("ipcs -mi "a[1])}}' | grep 'Shared memory Segment shmid' | awk -F"=" '{print $NF}' | sort -n | head -1`
+	echo ${shmid} >> ${outdir}/fcdebug_shmid
 	${MAPR_HOME}/server/tools/fcdebug -s  ${shmid} -l DEBUG
 	fcret=$?
 	if [ $fcret -ne 0 ]; then 
@@ -156,6 +160,7 @@ collect_fcdebug() {
 		return 1
 	fi
 	sleep ${fcint}m 
+	echo "Reverting fcdebug to INFO"
 	${MAPR_HOME}/server/tools/fcdebug -s  ${shmid} -l INFO 
 	fcret=$?
 	if [ $fcret -ne 0 ]; then
@@ -286,7 +291,7 @@ check_is_error $ret_val "Exiting..error related to process or process user"
 pid_java_path=`echo ${pid_info} | awk '{print $3}' | awk -F"/" 'BEGIN { OFS = "/" } { $NF="";print}'` 
 
 echo $$ > ${outdir}/jdump_pid.out
-echo "Starting diagnostics collection. To stop this, run stop_jdump.sh ${outdir}"
+echo "Starting diagnostics collection. To stop this, run \"stop_jdump.sh ${outdir}\""
 
 ########### Collect jstat#######
 
@@ -305,7 +310,6 @@ jdump_pids+=($!)
 ##########Collect fcdebug#######
 
 if [ $fcdebug -eq 1 ]; then
-	touch ${outdir}/fcdebug_is_enabled	
 	collect_fcdebug &
 	jdump_pids+=($!)
 fi
