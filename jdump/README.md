@@ -5,7 +5,7 @@ This is a tool to collect HPE Ezmeral java process diagnostics
 The tool collects jstat, jstack, heap information and fcdebug information of a running JVM process. Requested diagnostics are collected in the output directory mentioned through --outdir option. If this option is not specified, requested information is collected under /opt/mapr/logs
 
 # Tool Options
-
+```bash
 Usage ./jdump.sh [options] <java process id>
 Options:
 
@@ -17,6 +17,8 @@ Options:
         --heapdump(Also collects heap dump. By default heap dump is not collected)
         --fcdebug(Collect mapr file client debug. By default fcdebug is not collected.)
         --fcint interval (Interval until file client debug needs to be collected. Works only with --fcdebug option.)
+
+
 
 # Example
 
