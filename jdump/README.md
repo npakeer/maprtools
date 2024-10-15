@@ -46,4 +46,4 @@ Collecting heap dump
 Dumping heap to /opt/mapr/logs/jdump_14139_20241014_164209/heapdump_14139.hprof ...
 Heap dump file created
 Heap Information collection ended
-
+Requested info is collected in the dir /opt/mapr/logs/jdump_14139_20241014_164209
