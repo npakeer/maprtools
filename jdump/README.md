@@ -49,3 +49,19 @@ Dumping heap to /opt/mapr/logs/jdump_14139_20241014_164209/heapdump_14139.hprof 
 Heap dump file created
 Heap Information collection ended
 Requested info is collected in the dir /opt/mapr/logs/jdump_14139_20241014_164209
+
+# Stopping Jdump
+
+stop_jdump.sh command can be used to stop jdump.
+
+```bash
+Usage: ./stop_jdump.sh  <Diagnostics Output directory>
+```
+
+#Example
+
+```bash
+[mapr@m2-maprts-vm85-173 ~]$ ./stop_jdump.sh /opt/mapr/logs/jdump_14139_20241014_223911
+Killing jstat, jstack and jmap etc..
+File client DEBUG  is enabled. Reverting back to INFO
+```
