@@ -16,6 +16,21 @@ usage() {
 	exit 1
 }
 
+check_is_error() {
+
+	message=$2
+	local func_ret_code=$1
+
+	if [ ${func_ret_code} -eq 0 ]; then 
+		return 0
+	else
+		echo "$message"	
+		exit 1
+	fi
+}
+	
+	
+
 get_java_cmd() {
 
 	JAVA_CMD=${1}
@@ -26,9 +41,9 @@ get_java_cmd() {
 		echo "Found ${JAVA_CMD_PATH}"
 		JAVA_CMD_PATH=${pid_java_path}/${1}
 
-	elif [ ! -z ${JAVA_HOME} ] && [ -f ${JAVA_HOME}/${1} ]; then
-		echo "Cannot find ${pid_java_path}/${JAVA_CMD}, using JAVA_HOME=${JAVA_HOME}"		
-		JAVA_CMD_PATH=${JAVA_HOME}/${1}
+	elif [ ! -z ${JAVA_HOME} ] && [ -f ${JAVA_HOME}/bin/${1} ]; then
+		echo "Cannot find ${pid_java_path}/bin/${JAVA_CMD}, using JAVA_HOME=${JAVA_HOME}"		
+		JAVA_CMD_PATH=${JAVA_HOME}/bin/${1}
 	else
 		echo "Cannot find ${JAVA_CMD} under ${pid_java_path} and JAVA_HOME"
 		echo "Using plain ${JAVA_CMD}"
@@ -37,52 +52,62 @@ get_java_cmd() {
 }
 
 validate_pid_info() {
-
+	
+	local ret_code=0
+	
 	current_user=`whoami`
 	if [ "${current_user}" != "$1" ]; then 
 		echo "Current user is ${current_user}, jdump needs to run as ${1}"
-		exit 1;
+		ret_code=1;
 	fi
 	if [ "$2" != "java" ]; then 
 		echo "The process ${3} is not a java process"
-		exit 1
+		ret_code=1
 	fi
+	return $ret_code
 }
 
 validate_outdir() {
 
+	local ret_code=0
 	echo "Checking the output directory ${outdir}"
 	
-	if [ -d ${outdir} ]; then 
-		echo "Directory ${outdir} already exists"
-	else
-		echo "Directory ${outdir} does not exist. Creating the directory"
-		mkdir  ${outdir}
-		if [ $? -ne 0 ]; then
-			echo "Cannot create the output ${outdir} directory..exiting"
-			exit 1
+	if [ ${outflag} -eq 1 ]; then 
+		if [ ! -d ${parent_outdir} ]; then
+			echo "Directory ${parent_outdir} does not exist"
+			ret_code=1
+		else
+			mkdir ${outdir}
+			ret_code=$?
 		fi
+	else
+		echo "No ouput directory provided for diagnostics. Creating ${outdir}"
+		mkdir  ${outdir}
+		ret_code=$?
 	fi
+
+	return ${ret_code}
 
 }
 
 collect_jstat() {
 
 	echo "Collecting jstat for ${pid}"
-	jstatret=0
+	local jstatret=0
 	${JSTAT_CMD} -gcutil -t ${pid} ${jstatint} ${jstatcnt} > ${outdir}/jstat_${pid}_$(date +"%Y%m%d_%H%M%S")
 	jstatret=$?
 	if [ $jstatret -ne 0 ]; then 
 		echo "Having trouble running jstat for the pid ${pid}"
 	fi
+	echo "jstat collection ended"
 	return $jstatret	
 
 }
 
 collect_jstack() {
 	echo "Collecting jstacks"
-	counter=0
-	jstckret=0
+	local counter=0
+	local jstckret=0
 	
 	while [ ${counter} -lt ${jstackcnt} ]; 
 	do 
@@ -95,12 +120,13 @@ collect_jstack() {
 		sleep ${jstackint}s				
 		counter=$((counter + 1))
 	done	
+	echo "jstacks collection ended"
 	return $jstckret
 }
 
 collect_heap_info() {
 	echo "Collecting heap information"
-	jmapret=0
+	local jmapret=0
 	${JMAP_CMD} -histo ${pid} > ${outdir}/jmap_${pid}_histo
 	${JMAP_CMD} -histo:live ${pid} > ${outdir}/jmap_${pid}_histo_live
 	jmapret=$?
@@ -117,14 +143,15 @@ collect_heap_info() {
 			echo "Heap dump collection failed"
 		fi		
 	fi	
+	echo "Heap Information collection ended"
 	return $jmapret
 }
 
 collect_fcdebug() {
 
-	fcret=0
+	local fcret=0
 	echo "Collecting mapr file client debug, using fcdebug"
-	shmid=`ipcs -mp | awk '{if ($3 == "1290894") {split($0,a," "); system("ipcs -mi "a[1])}}' | grep 'Shared memory Segment shmid' | awk -F"=" '{print $NF}' | sort -n | head -1`
+	shmid=`ipcs -mp | awk -v target_pid=$pid '{if ($3 == target_pid) {split($0,a," "); system("ipcs -mi "a[1])}}' | grep 'Shared memory Segment shmid' | awk -F"=" '{print $NF}' | sort -n | head -1`
 	${MAPR_HOME}/server/tools/fcdebug -s  ${shmid} -l DEBUG
 	fcret=$?
 	if [ $fcret -ne 0 ]; then 
@@ -132,6 +159,7 @@ collect_fcdebug() {
 		return 1
 	fi
 	sleep ${fcint}m 
+	echo "Reverting fcdebug to INFO"
 	${MAPR_HOME}/server/tools/fcdebug -s  ${shmid} -l INFO 
 	fcret=$?
 	if [ $fcret -ne 0 ]; then
@@ -144,6 +172,19 @@ collect_fcdebug() {
 	return $fcret
 	
 }
+wait_child_pids(){
+	local ret_val=0
+	for child_pid in "${jdump_pids[@]}"; do
+    		wait $child_pid
+		tmp_ret=$?	
+    		if [ $tmp_ret -ne 0 ]; then
+			ret_val=$tmp_ret
+
+		fi
+	done
+	return ${ret_val}
+}
+
 
 #############
 ## MAIN #####
@@ -160,6 +201,8 @@ fcdebug=0
 fcint=5
 pidflag=0
 outflag=0
+jdump_pids=()
+exit_code=0
 # Process command-line options
 
 if [ $# -eq 0 ]; then 
@@ -171,7 +214,7 @@ fi
 while [ "$#" -gt 1 ]; do
     case "$1" in
         --outdir | -o)
-            	outdir="$2" 
+            	parent_outdir="$2" 
 		outflag=1
             	shift       
             	;;
@@ -218,56 +261,80 @@ if ! [[ "$pid" =~ ^[0-9][0-9]*$ ]]; then
 fi
 
 
-
-
 pid_info=`ps -o pid,user,args --pid ${pid} --no-headers`
 if [ $? -ne 0 ]; then
 	echo "Invalid Process Id"
 	exit 1
 fi
 
+jdump_id=jdump_${pid}_$(date +"%Y%m%d_%H%M%S")
+
 if [ ${outflag} -eq 0 ]; then
-	outdir=${MAPR_HOME}/logs/jdump_${pid}_$(date +"%Y%m%d_%H%M%S")
+	outdir=${MAPR_HOME}/logs/${jdump_id}
 	echo "Using default directory $outdir"
-	
+else
+	outdir=${parent_outdir}/${jdump_id}
 fi
+
 validate_outdir
+ret_val=$?
+check_is_error ${ret_val} "Error creating output directory"
 
 pid_user=`echo ${pid_info} | awk '{print $2}'`
 pid_proc=`echo ${pid_info} | awk '{print $3}' | awk -F"/" '{print $NF}'`
+
 validate_pid_info ${pid_user} ${pid_proc} ${pid}
+ret_val=$?
+check_is_error $ret_val "Exiting..error related to process or process user"
+
 pid_java_path=`echo ${pid_info} | awk '{print $3}' | awk -F"/" 'BEGIN { OFS = "/" } { $NF="";print}'` 
+
+echo $$ > ${outdir}/jdump_pid.out
+echo "Starting diagnostics collection. To stop this, run \"stop_jdump.sh ${outdir}\""
+
 ########### Collect jstat#######
+
 get_java_cmd "jstat"
 JSTAT_CMD=$JAVA_CMD_PATH
-collect_jstat ${JSTAT_CMD} 
-ret1=$?
+collect_jstat ${JSTAT_CMD} &
+jdump_pids+=($!)
+
 ########### Collect jstack#######
+
 get_java_cmd "jstack"
 JSTACK_CMD=$JAVA_CMD_PATH
-collect_jstack ${JSTACK_CMD}
-ret2=$?
+collect_jstack ${JSTACK_CMD} &
+jdump_pids+=($!)
+
 ##########Collect fcdebug#######
-ret3=0
+
 if [ $fcdebug -eq 1 ]; then
-	collect_fcdebug
-	ret3=$?
+	touch ${outdir}/fcdebug_is_enabled	
+	collect_fcdebug &
+	jdump_pids+=($!)
 fi
+
+###############################
+
+wait_child_pids
+exit_code=$?
+
+
 ########### Collect Heap info#######
+
 get_java_cmd "jmap"
 JMAP_CMD=$JAVA_CMD_PATH
 collect_heap_info ${JMAP_CMD}
-ret4=$?
+heap_ret_code=$?
+
+if [ $heap_ret_code -ne 0 ]; then 
+	exit_code=$heap_ret_code
+fi
+
+#############
 
 echo "Requested info is collected in the dir $outdir"
 
-#if [ [ $ret1 -ne 0 ] -o [ $ret2 -ne 0 ] -o [ $ret3 -ne 0 ] -o [ $ret4 -ne 0 ] ]; then 
-#	exit 1
-#fi
-
- 
-if [ $ret1 -ne 0 -o $ret2 -ne 0 -o $ret3 -ne 0 -o $ret4 -ne 0 ]; then 
-	exit 1
-fi
+exit ${exit_code}
 
 exit 0 
