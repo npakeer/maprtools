@@ -2,7 +2,7 @@
 
 This is a tool to collect HPE Ezmeral java process diagnostics
 
-The tool collects jstat, jstack, heap information and fcdebug information of a running JVM process
+The tool collects jstat, jstack, heap information and fcdebug information of a running JVM process. Requested diagnostics are collected in the output directory mentioned through --outdir option. If this option is not specified, requested information is collected under /opt/mapr/logs
 
 # Tool Options
 
