@@ -49,10 +49,11 @@ Dumping heap to /opt/mapr/logs/jdump_14139_20241014_164209/heapdump_14139.hprof 
 Heap dump file created
 Heap Information collection ended
 Requested info is collected in the dir /opt/mapr/logs/jdump_14139_20241014_164209
+```
 
 # Stopping Jdump
 
-stop_jdump.sh command can be used to stop jdump.
+stop_jdump.sh command can be used to stop jdump. One needs to give output directory given by the jdump as the argument to the stop_jdump.sh. stop_jdump.sh command kills all child and grand children of jdump and also sets file client debug back to INFO.
 
 ```bash
 Usage: ./stop_jdump.sh  <Diagnostics Output directory>
