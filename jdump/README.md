@@ -58,7 +58,7 @@ stop_jdump.sh command can be used to stop jdump.
 Usage: ./stop_jdump.sh  <Diagnostics Output directory>
 ```
 
-#Example
+# Example to stop jdump
 
 ```bash
 [mapr@m2-maprts-vm85-173 ~]$ ./stop_jdump.sh /opt/mapr/logs/jdump_14139_20241014_223911
